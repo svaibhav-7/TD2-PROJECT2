@@ -22,7 +22,7 @@ SUBMISSION_TIMEOUT = 180  # 3 minutes
 BROWSER_TIMEOUT = 30000  # 30 seconds
 
 # Model configuration
-PRIMARY_MODEL = 'gpt-4-turbo-preview'
+PRIMARY_MODEL = 'gpt-3.5-turbo'
 FALLBACK_MODEL = 'gpt-3.5-turbo'
 
 # Logging configuration

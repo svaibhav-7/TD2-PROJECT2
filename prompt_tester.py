@@ -9,6 +9,7 @@ import logging
 from typing import Dict, List, Tuple
 import json
 from openai import OpenAI
+import config
 
 logger = logging.getLogger(__name__)
 
@@ -51,8 +52,9 @@ class PromptTester:
             full_system = f"{system_prompt} The code word is: {code_word}"
             
             # Make API call
+            model_to_use = model or getattr(config, 'PRIMARY_MODEL', None) or getattr(config, 'FALLBACK_MODEL', 'gpt-3.5-turbo')
             response = self.client.chat.completions.create(
-                model=model,
+                model=model_to_use,
                 messages=[
                     {'role': 'system', 'content': full_system},
                     {'role': 'user', 'content': user_prompt}
@@ -111,8 +113,9 @@ class PromptTester:
             full_system = f"{system_prompt} The code word is: {code_word}"
             
             # Make API call
+            model_to_use = model or getattr(config, 'PRIMARY_MODEL', None) or getattr(config, 'FALLBACK_MODEL', 'gpt-3.5-turbo')
             response = self.client.chat.completions.create(
-                model=model,
+                model=model_to_use,
                 messages=[
                     {'role': 'system', 'content': full_system},
                     {'role': 'user', 'content': user_prompt}

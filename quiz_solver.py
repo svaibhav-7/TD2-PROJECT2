@@ -13,6 +13,7 @@ import base64
 from pathlib import Path
 
 from openai import AsyncOpenAI, OpenAI
+import config
 from playwright.async_api import async_playwright, Page, Browser
 
 logger = logging.getLogger(__name__)
@@ -136,8 +137,9 @@ class QuizSolver:
             return 'unknown'
         
         try:
+            model = getattr(config, 'PRIMARY_MODEL', None) or getattr(config, 'FALLBACK_MODEL', 'gpt-3.5-turbo')
             response = self.client.chat.completions.create(
-                model='gpt-3.5-turbo',
+                model=model,
                 messages=[
                     {
                         'role': 'system',
@@ -151,11 +153,35 @@ class QuizSolver:
                 max_tokens=10,
                 temperature=0.3
             )
-            
             return response.choices[0].message.content.strip().lower()
         
         except Exception as e:
+            # If model not found, try fallback model
+            err = str(e)
             logger.error(f"Error classifying question: {e}")
+            try:
+                if 'model_not_found' in err or 'does not exist' in err:
+                    fallback = getattr(config, 'FALLBACK_MODEL', 'gpt-3.5-turbo')
+                    logger.info(f"Retrying classification with fallback model: {fallback}")
+                    response = self.client.chat.completions.create(
+                        model=fallback,
+                        messages=[
+                            {
+                                'role': 'system',
+                                'content': 'Classify the quiz question type in one word: file_processing, web_scraping, api_call, data_analysis, visualization, or other'
+                            },
+                            {
+                                'role': 'user',
+                                'content': question
+                            }
+                        ],
+                        max_tokens=10,
+                        temperature=0.3
+                    )
+                    return response.choices[0].message.content.strip().lower()
+            except Exception:
+                pass
+            return 'unknown'
             return 'unknown'
     
     async def analyze_with_llm(self, question: str, context: Dict[str, Any]) -> Any:
@@ -183,8 +209,9 @@ Analyze the question and provide the answer. The answer should be:
 IMPORTANT: Only provide the answer value, no explanation.
 """
             
+            model = getattr(config, 'PRIMARY_MODEL', None) or getattr(config, 'FALLBACK_MODEL', 'gpt-3.5-turbo')
             response = self.client.chat.completions.create(
-                model='gpt-3.5-turbo',
+                model=model,
                 messages=[
                     {'role': 'system', 'content': 'You are a data analysis expert. Solve the quiz question.'},
                     {'role': 'user', 'content': prompt}
@@ -199,7 +226,27 @@ IMPORTANT: Only provide the answer value, no explanation.
             return self._parse_answer(answer)
         
         except Exception as e:
+            err_str = str(e)
             logger.error(f"Error analyzing with LLM: {e}")
+            # If model not found error, retry with fallback
+            try:
+                if 'model_not_found' in err_str or 'does not exist' in err_str:
+                    fallback = getattr(config, 'FALLBACK_MODEL', 'gpt-3.5-turbo')
+                    logger.info(f"Retrying analysis with fallback model: {fallback}")
+                    response = self.client.chat.completions.create(
+                        model=fallback,
+                        messages=[
+                            {'role': 'system', 'content': 'You are a data analysis expert. Solve the quiz question.'},
+                            {'role': 'user', 'content': prompt}
+                        ],
+                        max_tokens=1000,
+                        temperature=0.7
+                    )
+                    answer = response.choices[0].message.content.strip()
+                    logger.info(f"LLM generated answer (fallback): {answer}")
+                    return self._parse_answer(answer)
+            except Exception:
+                pass
             return None
     
     def _parse_answer(self, answer_text: str) -> Any:
@@ -242,7 +289,7 @@ IMPORTANT: Only provide the answer value, no explanation.
             'email': email,
             'secret': secret,
             'url': quiz_url,
-            'answer': answer
+            'answer': answer if answer is not None else ""
         }
         
         try:
@@ -250,7 +297,37 @@ IMPORTANT: Only provide the answer value, no explanation.
                 logger.info(f"Submitting answer to {url}: {answer}")
                 
                 async with session.post(url, json=payload) as response:
-                    result = await response.json()
+                    # Try to parse JSON; if server returns non-JSON (HTML/text), capture it
+                    content_type = response.headers.get('Content-Type', '')
+                    try:
+                        if 'application/json' in content_type.lower():
+                            result = await response.json()
+                        else:
+                            text = await response.text()
+                            # Attempt to parse JSON from body if it looks like JSON
+                            try:
+                                result = json.loads(text)
+                            except Exception:
+                                result = {
+                                    'correct': False,
+                                    'reason': f'Unexpected response content-type: {content_type}',
+                                    'raw': text[:1000]
+                                }
+                    except Exception as e:
+                        # Generic fallback if json() raises
+                        try:
+                            text = await response.text()
+                            result = {
+                                'correct': False,
+                                'reason': f'Error decoding JSON: {e}',
+                                'raw': text[:1000]
+                            }
+                        except Exception as e2:
+                            result = {
+                                'correct': False,
+                                'reason': f'Error reading response: {e2}'
+                            }
+
                     logger.info(f"Submission response: {result}")
                     return result
         
