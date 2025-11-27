@@ -16,6 +16,11 @@ FLASK_DEBUG = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
 SECRET_KEY = os.getenv('SECRET_KEY', 'your-secret-here')
 EMAIL = os.getenv('EMAIL', 'your-email@example.com')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
+# Optional fallback provider keys
+AIPIPE_API_KEY = os.getenv('AIPIPE_API_KEY', '') or os.getenv('AIPIPE_TOKEN', '')
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '') or os.getenv('GEMINI_TOKEN', '')
+AIPIPE_API_URL = os.getenv('AIPIPE_API_URL', '')
+GEMINI_API_URL = os.getenv('GEMINI_API_URL', '')
 
 # Timeout settings
 SUBMISSION_TIMEOUT = 180  # 3 minutes
@@ -25,9 +30,19 @@ BROWSER_TIMEOUT = 30000  # 30 seconds
 PRIMARY_MODEL = 'gpt-3.5-turbo'
 FALLBACK_MODEL = 'gpt-3.5-turbo'
 
+# Allow disabling heuristic fallback (for grading: ensure only LLM used)
+USE_HEURISTIC_FALLBACK = os.getenv('USE_HEURISTIC_FALLBACK', 'True').lower() == 'true'
+
 # Logging configuration
 LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
 LOG_FILE = os.getenv('LOG_FILE', 'quiz_solver.log')
+# Enable/disable heuristic fallback when LLMs are unavailable
+ENABLE_HEURISTIC_FALLBACK = os.getenv('ENABLE_HEURISTIC_FALLBACK', 'True').lower() == 'true'
+
+# When true, only LLM-generated answers will be used. Heuristic *submit_url* parsing
+# may still be used to detect endpoints, but *heuristic answers* are not allowed.
+# This flag is intended for grading/evaluation mode to make behaviour stricter.
+GRADING_MODE = os.getenv('GRADING_MODE', 'False').lower() == 'true'
 
 # Database configuration (if needed)
 DATABASE_URL = os.getenv('DATABASE_URL', None)
