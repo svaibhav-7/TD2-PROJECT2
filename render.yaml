@@ -1,0 +1,30 @@
+# Render deployment configuration for TD2-PROJECT2
+# Sample render.yaml to automatically create and deploy a Render Web Service
+# Adjust env vars as necessary (do not store secrets in source control)
+services:
+  - type: web
+    name: llm-analysis-quiz
+    env: docker
+    repo: svaibhav-7/TD2-PROJECT2
+    branch: main
+    plan: standard
+    # Do not store secrets here - use Render dashboard environment variables for secrets
+    envVars:
+      - key: OPENAI_API_KEY
+      - key: SECRET_KEY
+      - key: EMAIL
+      - key: GRADING_MODE
+      - key: ENABLE_HEURISTIC_FALLBACK
+      - key: AIPIPE_API_KEY
+      - key: AIPIPE_API_URL
+      - key: GEMINI_API_KEY
+      - key: GEMINI_API_URL
+      - key: FLASK_DEBUG
+      - key: LOG_LEVEL
+    startCommand: "sh -c \"gunicorn --bind 0.0.0.0:${PORT:-5000} --timeout 120 --workers 2 --threads 4 app:app\""
+    healthCheckPath: "/health"
+    autoDeploy: true
+    # Scale settings
+    instanceCount: 1
+    # Use Render's standard plan, change to 'starter' or 'pro' as needed
+    # Note: Playwright can be memory intensive; consider Standard 2GB/1CPU
