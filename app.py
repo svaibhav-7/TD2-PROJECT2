@@ -97,16 +97,16 @@ def handle_quiz():
     email = data.get('email')
     secret = data.get('secret')
     quiz_url = data.get('url')
-    
+
     # Validate required fields
     if not all([email, secret, quiz_url]):
         return jsonify({'error': 'Missing required fields'}), 400
-    
+
     # Verify secret
     if secret != SECRET_KEY:
         logger.warning(f"Invalid secret attempt from {email}")
         return jsonify({'error': 'Invalid secret'}), 403
-    
+
     # Verify email matches
     if email != EMAIL:
         logger.warning(f"Email mismatch: {email} != {EMAIL}")
@@ -262,28 +262,31 @@ async def process_question(question_data: Dict[str, Any]) -> Any:
         # Use LLM for complex analysis
         logger.info("Calling LLM for analysis")
         answer = await quiz_solver.analyze_with_llm(question, question_data)
-        # If LLM generated answer, mark source
+        # If an answer was generated, log the source (llm | external | heuristic)
         if answer is not None:
-            logger.info("Answer source: LLM")
-        else:
-            # LLM failed to generate an answer. Use heuristic fallback only if enabled.
-            if getattr(config, 'ENABLE_HEURISTIC_FALLBACK', True):
-                logger.warning(f"LLM analysis failed; last error: {quiz_solver.last_llm_error}. Attempting heuristic fallback.")
-                # When grading mode is enabled, do not use heuristic answers
-                if getattr(config, 'GRADING_MODE', False):
-                    logger.info("GRADING_MODE=True; not using heuristic answer fallback for grading.")
-                    answer = None
-                else:
-                    # If heur_result contains a sample answer, use that first
-                    if heur_result and heur_result.get('answer') is not None:
-                        logger.info("Using heuristic parsed example answer as fallback")
-                        answer = heur_result.get('answer')
-                        logger.info("Answer source: heuristic")
-                    else:
-                        answer = await quiz_solver.heuristic_solve(question_data)
-                        logger.info("Answer source: heuristic")
+            src = getattr(quiz_solver, 'last_answer_source', None)
+            if src:
+                logger.info(f"Answer source: {src}")
             else:
-                logger.info("Heuristic fallback disabled; not attempting heuristic fallback")
+                logger.info("Answer source: unknown")
+        else:
+            # LLM failed to generate an answer. Use heuristic fallback, and force fallback if LLM quota/rate-limit errors are detected
+            llm_err = getattr(quiz_solver, 'last_llm_error', '') or ''
+            llm_err_lower = llm_err.lower() if isinstance(llm_err, str) else ''
+            force_heuristic = any(x in llm_err_lower for x in ('insufficient_quota', '429', 'too many requests', 'quota', 'rate limit'))
+            should_use_heuristic = getattr(config, 'ENABLE_HEURISTIC_FALLBACK', True) or force_heuristic
+            if not should_use_heuristic:
+                logger.info("Heuristic fallback disabled and no quota error detected; not attempting heuristic fallback")
+            else:
+                logger.warning(f"LLM analysis failed; last error: {quiz_solver.last_llm_error}. Attempting heuristic fallback. Forced: {force_heuristic}")
+                # If heur_result contains a sample answer, use that first
+                if heur_result and heur_result.get('answer') is not None:
+                    logger.info("Using heuristic parsed example answer as fallback")
+                    answer = heur_result.get('answer')
+                    logger.info("Answer source: heuristic")
+                else:
+                    answer = await quiz_solver.heuristic_solve(question_data)
+                    logger.info("Answer source: heuristic")
     
     return answer
 

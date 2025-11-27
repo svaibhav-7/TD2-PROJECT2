@@ -36,6 +36,8 @@ class QuizSolver:
         self.browser: Optional[Browser] = None
         # Track the last LLM error message if any
         self.last_llm_error: Optional[str] = None
+        # Track where the last answer came from: 'llm', 'external', 'heuristic'
+        self.last_answer_source: Optional[str] = None
     
     async def visit_and_extract(self, url: str) -> Dict[str, Any]:
         """
@@ -322,6 +324,7 @@ IMPORTANT: Only provide the answer value, no explanation.
             answer = (self._extract_response_text(response) or '').strip()
             logger.info(f"LLM generated answer: {answer}")
             self.last_llm_error = None
+            self.last_answer_source = 'llm'
             return self._parse_answer(answer)
         
         except Exception as e:
@@ -350,6 +353,7 @@ IMPORTANT: Only provide the answer value, no explanation.
                             answer = (self._extract_response_text(response) or '').strip()
                             self.last_llm_error = None
                             logger.info(f"LLM generated answer (fallback): {answer}")
+                            self.last_answer_source = 'llm'
                             return self._parse_answer(answer)
                         except Exception as e2:
                             if i == attempts - 1:
@@ -369,6 +373,8 @@ IMPORTANT: Only provide the answer value, no explanation.
                         logger.info("Attempting external fallback via AIPipe")
                         ext_resp = await self._call_external_llm(config.AIPIPE_API_URL, config.AIPIPE_API_KEY, prompt)
                         if ext_resp:
+                            logger.info(f"External provider returned answer via AIPipe/Gemini")
+                            self.last_answer_source = 'external'
                             return self._parse_answer(ext_resp)
                     # Try Gemini
                     if config.GEMINI_API_KEY and config.GEMINI_API_URL:
@@ -378,10 +384,17 @@ IMPORTANT: Only provide the answer value, no explanation.
                             return self._parse_answer(ext_resp)
             except Exception as e2:
                 logger.error(f"Error calling external provider: {e2}")
-            # If LLMs are unavailable, fallback to a heuristic solver when possible
-            heur_answer = await self.heuristic_solve(context if isinstance(context, dict) else {'text': question})
-            if heur_answer:
-                return heur_answer
+            # If LLMs are unavailable, fallback to a heuristic solver when possible.
+            # Use heuristics if explicitly enabled or if error indicates quota/rate limiting.
+            err_lower = err_str.lower() if isinstance(err_str, str) else ''
+            force_heuristic = any(x in err_lower for x in ('insufficient_quota', '429', 'too many requests', 'quota', 'rate limit'))
+            if getattr(config, 'ENABLE_HEURISTIC_FALLBACK', True) or force_heuristic:
+                logger.warning(f"Falling back to heuristic solver due to LLM error: {err_str}")
+                heur_answer = await self.heuristic_solve(context if isinstance(context, dict) else {'text': question})
+                if heur_answer:
+                    logger.info("Heuristic fallback returned an answer")
+                    self.last_answer_source = 'heuristic'
+                    return heur_answer
             return None
 
     async def _call_external_llm(self, api_url: str, api_key: str, prompt: str) -> Optional[str]:

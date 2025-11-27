@@ -13,7 +13,6 @@ services:
       - key: OPENAI_API_KEY
       - key: SECRET_KEY
       - key: EMAIL
-      - key: GRADING_MODE
       - key: ENABLE_HEURISTIC_FALLBACK
       - key: AIPIPE_API_KEY
       - key: AIPIPE_API_URL

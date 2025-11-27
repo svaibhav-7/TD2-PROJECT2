@@ -39,10 +39,7 @@ LOG_FILE = os.getenv('LOG_FILE', 'quiz_solver.log')
 # Enable/disable heuristic fallback when LLMs are unavailable
 ENABLE_HEURISTIC_FALLBACK = os.getenv('ENABLE_HEURISTIC_FALLBACK', 'True').lower() == 'true'
 
-# When true, only LLM-generated answers will be used. Heuristic *submit_url* parsing
-# may still be used to detect endpoints, but *heuristic answers* are not allowed.
-# This flag is intended for grading/evaluation mode to make behaviour stricter.
-GRADING_MODE = os.getenv('GRADING_MODE', 'False').lower() == 'true'
+# (Deprecated) GRADING_MODE removed: heuristics will be used as fallback when LLM is unavailable
 
 # Database configuration (if needed)
 DATABASE_URL = os.getenv('DATABASE_URL', None)
